@@ -1,0 +1,266 @@
+---
+title: "Statistical Tests - Notes"
+author: "SarahLynn"
+date: "11/12/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Statistical testing can be extremely insightful. Software development and machine learning algorithms are all much more infallible; you know you did it right because the product either works or it doesnt. Of course, I'm generalizing to make a point. Generally, a machine learned search algorithm that returns relevant results (relevant as determined by predefined metrics) is a success. A piece of software to create a web page either renders the page as you designed it or it doesnt. It's more straightforward to identify issues and troubleshoot them. Now, to know if those are GOOD products or not, that's where we need statistical testing. It's a difficult science since there are multiple ways to approach it, and those multiple ways can lead to *different* outcomes (they shouldn't, but they can). I've constantly worried about this as I've endeavoured to perform such analyses. Am I using the right test? Did I meet the assumptions for the test? Did I really learn *all* that I could from this data? So this document is where I've gather my notes, some basic, some more advanced, for how to generally approach a statistical inference analysis. This wont be all inclucsive, but it shows how everything relates so you know where to start.  
+
+## Overview
+
+This document will review the following topics:
+
+* Classes of statistical tests
+  + Comparison tests
+  + Correlation tests
+  + Regression tests
+  + Non parametric tests
+* Specific statistical tests
+  + Chart to summarize how tests relate
+  + Notes on selecting an appropriate test
+* Assumptions for classes of statistical tests
+* Basic EDA suggestions to start with
+* Errors with testing and how to address them
+  + Type 1 vs Type 2 error
+  + Multiple comparisons test corrections to alpha
+* Structuring test & control groups
+  + A/B test design
+  + Before/after analysis
+  + Cohort testing
+  + other
+* Bayesian testing fundamentals
+* Other statistical testing related topics
+  + Wilson Score & Agrestic/Couli Intervals
+  + Chebychev's inequality
+  + Multi-arm bandit
+
+  
+## Classes of statistical tests
+
+There are 3 main classes of parametric statistical tests: 1) Comparison tests, 2) Correlation tests, and 3) Regression tests. 
+
+**Comparison tests** are used to test differences among group means. They can be used to test the impact of a categorical variable (ie test vs control, or male vs female) on the mean value of a metric. T-tests are used when you have two groups, and ANOVA (and MANOVA) are used when you have 3+ groups (male vs female vs transgender). ANOVA tests use F-statistics to compare the variances of the means. A t-test uses t-statistics to compare the means, given the variability in the groups. So for 2 groups, t-tests and ANOVA should lead to the same conclusions, although the math is different for the different approaches. As a side note, F-tests are simply tests to compare variances, so aside from use within ANOVA, they can be used if the inisght of interest is if two groups have the same variance. 
+
+**Correlation tests** are used to check if two variables are related, but note that it says nothing about cause and effect. This can be used as a precursor to vet predictors to feed into a regression analysis (more on this later). A test statistic, confidence interval, and p-value can be calculated with a correlation test to see if the correlation observed is statistically significant. Note that the variables to evaluate can be categorical or continuous. 
+
+**Regression tests** are used to test for cause and effect relationships. They can be used to test for the effect of one or more continuous variables on another variable. When run as a simple regression with one predictor variable, this is the same scenario as a Pearson correlation test (which is a correlation test run on continous variables). The conclusions drawn from a correlation test are just that the variables are related however, so a regression test output gives you more and is stronger. Regression analysis can also tell you more than a comparison test since, if it's a good model fit, it can be predictive and give us interpretable coefficients for how much each predictor affects our outcome. 
+
+Aside from these 3 broad groups of tests, there are **non parametric** statistical tests. These are useful when the assumptions for a test are not met. Note however, that parametric tests are viewed as fairly robust in their required assumptions, and since parametric tests generally have higher power than their non-parametric counterparts, when at all possible, parametric tests should be used. Also, non parametric tests often involve ranking data (to address non normality) and therefore lose insights into the variability of the data. So if possible, doing a transformation on the data and using a parametric test will be best. Generally, non parametric tests are good for when you have 1) a small sample, 2) already ranked data or outliers can't be removed so ranking is best to mask them, or 3) an area of study is better represented by the median. 
+
+## Specific Statistical Tests
+
+
+After doing some EDA and checking test assumptions (both covered later), you can narrow down which test to use. Note that there are multiple ways tests can be approached, and usually (given each approach is moderately appropriate) they should yeild the same results. This is why it is so important to outline the testing approach BEFORE viewing results of the tests. Otherwise, it's easy to test hunt until you find a result you were hoping for. This undermines the integrity of testing as it increases the risk of errors (covered later). The good news is, as I alluded before, there are often multiple reasonable ways to approach a test and they should generally line up with eachother. For example, ANOVA with 2 groups is similar-ish to a t-test. As another example, sometimes maybe you can use a data transformation to obtain normality and then employ a t-test test, and this should be roughly equivalent to using a non-parametric test. While we favor doing parametric tests with transformed data, there are judgements all along the way of if the data is transformed appropriately, so there are easily varying opinions of the right testing approach in this scenario. So again, the most important thing is to do set the analysis approach ahead of time as much as is reasonably possible. 
+
+The following figure from Scribbr is the best flow chart I've found to visually show how the various statistical tests fit together.
+
+![Choosing a Statistical Test - from Scribbr](C:\Users\Sarah Lynn\Desktop\Self Study\Coursera DS JH - statistical inference\My own statistical inference content\flowchart-for-choosing-a-statistical-test-crop2.jpg)
+
+
+
+The chart above is only for parametric tests. For nonparametric tests, first consider a **bootsrapped approach**. Bootstrapping is when you sample with replacement. If you do this 50-100 times (google how many iterations per your situation, or do as many as you reasonable can), then take the mean of each sample, you can create a 95% confidence interval simply by taking the 2.5th and 97.5th percentiles of the distribution of means you've gathered from the repeated samples. It's really very simple! Bootstrapping is considered asymptotically correct, though be careful if you know your distribution has heavy tails or is not a representative sample. Bootsrapping is being used more and more recently since computing power has increased. But for a while it was seen as computationally intensive and therefore other nonparametric approaches were more common. These other approaches often still involve re-sampling, but with replacement (these are called permutation tests). Others use ranks instead of the raw data. Those that use ranks are more robust to outliers, so if you are dealing with data that has known, extreme outliers, this might be a better option than even a parametric test. If bootstrapping is not computationally possible, if you have heavy tails, or if the sample is not confidently representative, then consider the following table to find the corresponding nonparametric tests for each parametric test scenario:
+
+Parametric test    Nonparametric test
+---------------- -----------------------------------
+Chi-Square          Spearman
+T-test              Sign test or Wilcoxon Rank Sum
+ANOVA               Kruskal-Wallis
+MANOVA              ANOSIM
+
+
+In addition to all the specific tests listed here, there are countless others. This is a starting point. Once you have an example of a test that would be generally appropriate, search for others that are similar and pay attention to the differences and what might be most appropriate for your data and your hypothesis. 
+
+As a side note, bootstrapping can also be used in conjunction with a parametric test when we want to improve the accuracy of the power calculation (or sample size estimation) since this relies on the standard deviation of the statistic of interest. We can bootstrap this value to get a more reliable estimate for it to use in the power calculation. 
+
+Another side note, if our hypothesis of interest is to **detect if there is no difference** between two groups, then permutation tests (some of the nonparametric tests listed above) are more appropriate. Remember the idea behind permutation tests is that we permute the data to mix the test and control group labels, calculate a new test statistic based on the permuted labels, and re-run this process until we have generated a distribution for the test statistic. We use this distrubtion to calculate a p-value with the observed test statistic. Since the nature of this type of test is randomly mixing the control and test groups to see if there really is a difference, it lends itself better to the scenario where we want to know if there is no difference between the groups. 
+
+## Test Assumptions
+
+Every statistical test comes with test assumptions or criteria that should be met in order to ensure the test is appripriate to apply to the data. Some are more strict than others, depending on the robustness of the test. Below are the basic test assumptions listed for each of the classes of tests. Once a specific test is settled on, I'd search and ensure there are no additional specific assumptions to be met for the selected test. 
+
+### Assumptions for comparison tests
+
+* independence of observations
+* homogeneity of variance
+* normality of data
+
+Check for these via EDA in the begining, before a test is conducted since failure to meet any of these will deem a comparison test inappropriate. Note that unequal sample sizes can easily lead to different variances in the groups, and we would therefore fail the homogeneity of variance assumption. This point I've seen overlooked in industry, so be careful! There may be an adjustment needed to account for this, so do some research if this is your case. 
+
+To test your data for normality (sometimes a visual will suffice to check this, but if something more rigorous is needed), there are the Kolmogorov-Smirnov test, the Anderson-Darling test, and the Shapiro-Wilk test. These are just the most common, and just a few to get you started in your search.
+
+### Assumptions for correlation tests
+
+* no outliers
+
+Think of a correlation test as drawing a cirlce around the data points in a scatter plot. The more thin and linear the oval, the higher the correlation. Noisey data with one extreme outlier can also trigger a thin oval shape, so this is why we check visually ahead of time for outliers.
+
+### Assumptions for regression tests
+
+* relationships are linear-ish, or can be with transformations
+* predictors are not correlated
+* normality of residuals
+
+Obviously we wont know what the residuals look like until we already fit the model, and by then, we've hopefully narrowed down our statistical approach so we are not significance hunting. So for this, given the relationships are intuitively linear-ish, we can expect the residuals to be normal. Given that, and given the predictors are not correlated with eachother (or we do PCA - principal component analysis to make then non or less correlated), we could select regression testing as appropriate and then circle back to check the last assumption (normality of residuals) before we use the results of the test.
+
+### Assumptions for nonparametric tests
+
+* randomness
+* independence
+* variability in each group should be comparable
+
+These are relatively easy assumptions to meet. But note that nonparametric tests are harder to get signifiance on and therefore not as insightful. 
+
+
+
+When assumptions aren't met for a comparison test, first try transofmring the data to obtain normality as long as it doesnt affect interpretability too bad (otherwise it can make giving actionable insights impossible at the end). If transformations dont work, then try a nonparametric test. The reason for trying a transformation first is nonparametric tests have a harder time detecting differences so they are often less insightful. Some common transformations are below:
+
+Transformation    Mostly used for...   
+--------------- --------------------- 
+square root       counts               
+logaraithmic      reaction time
+logit             proportions
+fisher's Z        correlations
+
+
+## Basic EDA suggestions
+
+Here, I believe visuals are king. The point of exploratory data analyses (EDA) is to get to know your data. How clean is it? How much is there? Does it line up with expectations or is there something that surprises you? Through exploring your data, you may understand more and add new hypotheses to test (although be careful here as this might lead to inflation of the False Discovery Rate, which I'll cover later).
+
+The following are my suggestions for EDA:
+
+
+* View the data information
+  + How many rows and columns?
+  + What are the units on each variable?
+  + Read any metadata
+  + View the first few and last few rows
+* Clean the data
+  + Check for nulls and outliers and decide how to deal with them
+  + Check that character variables don't have typos
+  + Check that numerical values all make sense (ie. there are no negative values when referring to height)
+* Plot the data
+  + Histograms, boxplots, and scatter plots are great here
+  + Do a heatmap of the data to look for patterns
+* Consider clustering to see if analysis could be segmented
+* Consider transformations
+  + If statistical assumptions need to be met, consider transformations to obtain normality or dimension reduction tecniques (like SVD or PCA) to simplify for regressions or segmentation analyses
+ 
+## Errors with testing and how to address them
+
+While there are many ways one can make mistakes doing statistical testing, there are two formal types of errors; Type 1 and Type 2 errors. Type 1 error is the probability of rejecting the null hypothesis when it's true. Type 2 error is failure to reject the null hypothesis when it's false. Type 1 error is controled by the alpha level. When doing a statistical test, you will choose a confidence level, say 95%. 1 minus this confidence level is the alpha or type 1 error. We care about this since this is going to be the rate at which we will say something is statistically significant, even though it's not (it was just chance that we observed what we did). Type 2 error is essentially missing to detect a difference that is really there. Both are bad, and both are somewhat opposing, meaning that if you optimize for one too much you have to sacrifice the other. So choosing the right balance, per the specific scenario, is key. Generally, alpha is set to 5% and power (a metric set to control for type 2 error) is set to 80%. 
+
+False discovery rate (FDR) is the rate at which claims of signifiance are false. This is like Type 1 error as a rate. This is easy to inflate when doing multiple comparisons. Multiple comparisons come in to play when we have several breakdowns or subsets that we want to view the results with. This inflates the FDR, the same way you up your chances of winning the lottery by buying more tickets; any one instance isn't a high probability, but string them together and you might have a chance. Therefore, when performing multiple tests, we need to adjust the alpha level accordingly. There are a few options, but the option that seems most reasonable (and most common) is the Benhamin-Hochberg (BH) correction. To do this, you simply adjust the alpha levels that you compare each test to to determine if it's significant. Here are the steps to do the BH multiple test correction:
+
+1. Calulate all p-values 
+2. Order the p-values from smallest to largest
+3. Compare the smallest p-value to [1/(total # of tests)]x alpha, compare the second smallest to [2/(total # of tests)]x alpha,and so on till the largest p-value is compared to alpha. 
+
+So take an example where you have more than 2 groups that you'd like to compare to eachother, so you are likely going to be doing an ANOVA test. An ANOVA test uses F-statistics and is tesing for any of the groups to be different from another, but it doesn't tell you which one. Post hoc tests are required to determine which groups are different. When doing those post hoc tests, there are multiple comparisons so a correction (like the BH correction explained above) for that needs to be used. In general, if there are few groups being compared, then a BH adjustment is best. However, for large groups, it becomes increasingly difficult to obtain significance since BH is a little conservative, so this is where performing Tukey's test would be better (Tukey tests involve a different test statistic and is another approach to multiple testing corrections that control FDR).
+
+Another approach to consider, would be to take a "training and test set" approach. This would require enough data that you can split out the data for a training and test set and still have enough for a powerful (80% power) test of significance with each. If so, then look at all t-test results' p-values, find the ones that are significant with the training set, and then run the test for significance again with the test set to confirm if it is significant or not. This is a way to greatly reduce the FDR, although without researching it further, I'm not sure how conservative or aggressive this might be compared to other approaches.
+
+Therefore, just as when selecting a statistical test, use these notes as a starting point. Once you've narrowed it down to, say, post hoc Tukey tests, search to see if there is another similar test or test adjustment to this that might be more appropriate for your data and/or hypothesis.
+
+Another key issue to look out for with A/B testing is the peaking problem. Often, people will be impatient and want to reivew the results early and see how its doing. It's not intuitive for how peaking can change the outcome of the test, but really, because peaking is like viewing multiple test results, it has the same issue and will increase your false discovery rate. To avoid this, either make sure you eliminate peaking, or adjust the alpha level accordingly (like what is done for multiple test comparisons). Uber does the latter and calls it sequential testing. 
+
+## Structuring Test & Control groups
+
+When designing an experiment, or organizing and understanding data to know how to evaluate it, the cleanest way is if you can do an A/B test. This is when you'd randomly split observations into test (A) and control (B) groups, assuming they are independent. Sometimes we dont have this luxury and we need to perform a before/after analysis instead, or draw conclucions from cohort testing. The following sections walk through these situations and add more depth to each. 
+
+Any way you decide to test, be mindful of potentially needing a burn-in period. This is when it might take time for the test group to get used to the new treatment. Maybe it's a new user experience and there is a learning curve for knowing how to use it, or it's a drug that will take a minimum of 7 days to start to show effects. It can also be a period of time when the test and control groups were muddied/interacting with eachother. To account for this, simply ignore the days that are deemed burn-in period.
+
+### A/B test group designs
+
+Splitting observations between test and control groups is easy when they can be assigned on a per-user or other independent basis. This scenario is complicated when testing something that relies on interactions of the users (ie social media or other communications products). Also, note that an A/B test might overlook higher order effects (ie. how does the price of one product affect the perception and therefore demand of another?). 
+
+To try to account for these interactions we can test by community or group-based selection for test and control groups. It can be difficult to do this and ensure comparability between the groups. Plus, it can be hard to define what those communities or groups are. I've seen graph partitioning algorithms suggested to assist here (specifically normalized cuts). Other times, geographic partitioning might be appropriate, but still difficult to define reasonable geo locations (just because someone lives accross state lines, doesnt mean they dont interact with their neighbor). Given you can find a way to define groups or regions to block by for testing, next explore how comparable those groups are. They won't be as equal as if we could randomly assign them, but hopefully they aren't wildly different (lets say, within 30% of eachother on main metrics like mean and variance). To further minimize the effect of inevitably unequal groups, if the situations permits, you can flip the test and control treatments and re-run the test. Now you will have more of a paired observations test. Whether you choose to treat it liked a paired test or not will depend on how many pairs you'd have and if that'd therefore be the most appropriate test. Otherwise, you can combine control periods and combine test periods to then compare. Note that with this approach, you should be mindful of burn-in periods in-between flips.  
+
+### Before vs After analyses
+
+When all we can do is compare a treatment before and after it's implementation, we need to be mindful of the confounding variables that we may not be able to tease out as well as if it were an A/B test. Generally, when doing before vs after there should be a hold-out group, or another group that tracks similarly to the test group that we can use as a baseline to adjust our metrics by. After that, using the appropriate statistical test based on the characteristics of the data (ie using the scribbr flow chart from above) to come up with a confidence interval and/or p-value. 
+
+Also, consider using a paired t-test approach using the observations in the before and after periods as the paired observations.
+
+### Cohort Study
+
+A cohort study is one where the question at hand applies to a specific group of people, defined by a characteristic. This group is then referred to as a cohort, and studied under the test (again, using one of the test approaches above depending on what is appropriate). Typically, scenarios that use cohorts are ones that will be studied over time, since they generally relate to things like customer lifecycles. 
+I've seen a new experience tested as a "pilot study" where it was deployed, but could not be A/B tested as it was a compilation of changes to various aspects of the users experience. In this case, a simpler before vs after analysis would not suffice since it was too short-term a view for the expected results, so a cohort analysis was done to determine various cohorts of customers, and then these groups were tracked over time to see how they responded vs other cohorts who didn't recieve the change. This is not a perfectly controlled experiment, but is sometimes the best that can be done. 
+
+## Bayesian Approach to Inference
+
+So far, we've been covering a frequentist approach to testing. Frequentist statistics is the traditional approach used for statistical inference. More recently, Bayesian methods have been explored and implemented for inference. The highlevel difference between the two is that frequentist statistics assumes a true underlying value that we are trying to detect, whereas bayesian statistics will assume an underlying *distribution* for what we are trying to detect. This difference allows for different conclusions that can be drawn. While they should ultimatly be inferring the same insights, Bayesian conclusions are more intuitive as they are straight-forward probabilities. Put another way, frequentists will say "we are 95% confident that the true difference lies in this interval" but we can't venture to say where in the interval or how likely it is, and we often are limited by small sample sizes. Meanwhile, Bayesians will say "there is a x% probability that the test is better than the control" which is often the insight we are really looking for. Also, with Bayesian, we can give an estimate and/or interval for what difference between the groups is most likely, or similarly, what the probability is of any given difference between the groups. This is helpful for risk analysis. Furthermore, the nature of the insights from the Bayesian approach (being that they are probabilities) lend well to evaluating the data at any point/sample size, so peaking is no longer an issue. 
+
+So while frequentist approaches are more common, and will likely conclude similar results, we are less likely to misinterpret findings from a Bayesian analysis. Given this, my next question was, "well then why hasn't everyone switched to Bayes?". The likely answer to this is that Bayesian is more complex and harder to implement (easier to interpret, but harder to perform). Below is a very basic introduction to Bayesian inference, which is hopefully enough to get started with it. 
+
+### Steps for Bayesian A/B testing
+
+Step 1: Understand the prior belief - Give the analysis a starting point. Based on what you know about the metric you are comparing (maybe its historical mean and variance and general distribution shape), pick a model (ie Beta, Poisson,...) to represent it as the starting point. This is called the prior. For example, clicks on a website's feature would likely be modeled by a Beta distribution (Beta is appropriate for percentages and proportions). Based on how this placement has performed in the past, you might select the parameters to be Beta(8,42) so that it's centered where you want. Note, I would visually plot the data so see if it looks good. Remember, you are just looking to kick start the analsysis in the right ballpark. 
+
+Step 2: Collect data and update the posteriors - Once we collect data, we'll combine it with data from our prior and re-calculate the distribution to give us what we call a posterior distriution. The technical steps for how to do this will have to be googled as it will depend on the distribution used. There are likely built-in functions in R or Python (as there are for all statistical tests). 
+
+Step 3: Use Monte Carlo simulation to generate the probabilty of interest. Note that Monte Carlo simulation is just running tons of iterations of something (in this case, sampling from our posterior distribution) to estimate something instead of doing the math for it. So we'd sample, say 1000 times, from each of the posteriors and count how many times test was higher than control. The percentage of times test was higher than control is the probability that the test group is better than control. Also, if what is of interest is how one group performs relative to the other, you can divide the posterior distributions for test and control, to get a new distribution of how test performs relative to control. So you'd know what ratio is most likely, and have the distribution so you can calculate the probabilty of any ratio that they might perform at. This can be used to size how likely the risk of it actually being worse is (ie. find the probability that the relative distribution is less than 1).
+
+As a summary and final note, Bayesian Inference is easier to interpret and therefore likely better to implement in business. It's complex to implement, and conclusions greatly depend on the prior distribution chosen, so it's not always adopted. Some inference strategies consist of a blend of Frequentist and Bayesian approaches, attempting to get the best of both worlds. For me, if performing one-off analyses for inference, I would stick to frequestists approaches. If establishing a testing framework for a company, working with limited sample sizes, or performing a high-profile analysis that will be easy to misinterpret results from, then I'd explore a Bayesian approach if time permitted.
+
+## Other Statistical Testing Related Topics
+
+### Wilson Score Interval and Agresti/Coull Interval
+
+When performing a test using the binomial distribution (so working with proportions), if you have an extremely **small sample size**, or if you have a **proportion that is close to 0 or close to 1** (specifically, less than 5% or greater than 95%), then the typical proportions test confidence interval, called the Wald interval, will be unreliable as it is potentially too tight. To correct for this, you can use the Wilson Score Interval. Note that in R the prop.test function automatically returns the Wilson Score Interval by default.
+
+If you are only working with a small sample, but the proportion is reasonably far from 0 or 1, then you can do a simpler adjustment than the wilson score interval and instead do the Agresti/Coull interval, which simply adds 2 successes and 2 failures to your data.
+
+This topic helps demonstrate that, for any statistical inference approach, once the initial approach has been selected (say binomial proportions test), it should be researched further given specific characteristics of your data (ie small proportion) to see if there are any better approaches to explore.
+
+### Chebychev's inequality
+
+This simple formula is useful since it gives us a quick way to estimate probabilities relating to a given distribution. It can apply to *any* distribution. It states that a random variable x is at least k standard deviations from it's mean with probability less than $1 / k^2$ . Said another way, $1 - 1 / k^2$ at least  of the distribution's values are within k standard deviations of the mean. It is a conservative estimate for things normally distributed, but still, it's useful since it applies to all distributions.
+
+### Multi-arm bandit
+
+The multi-arm bandit approach attempts to balance exploration and exploitation. It is a method in which, given multiple options being tested, as soon as we have enough data to suspect that one group is better than the other, we update the data assignments/splits so that we send more to the promising experience. It can be used to accomplish personalization, or just faster captilization on learnings. If this scenario seems useful, google the details. 
+
+
+## Final Notes
+Given you've had exposure to statistical inference, and maybe had the same concerns or questions I did about where to start with all the options, hopefully this document helps organize the topics so you can more easily navigate to success. The appendix below simply lists the sites I used to learn or verify the information included in this report. They are listed roughly in order of how I covered the topics in this document. I tried to not include anything unless it had been verified in at least one of these sources. 
+
+Feedback about the content would be great! I'm interested in feedback specifically related to the theory (is anything said misleading or incorrect?) or the flow of the content (is is easy to follow and helpful to clarify the topic?). Feedback can be sent to swilde92\@gmail.com. Thank you!!
+
+## Appendix
+
+Useful references:
+
+https://www.scribbr.com/statistics/statistical-tests/
+
+https://www.researchgate.net/post/For_comparing_means_should_I_transform_data_to_make_it_normal_or_conduct_non-parametric_tests
+
+https://learncuriously.wordpress.com/2018/08/23/statistical-analysis-cheat-sheet/
+
+https://www.sagepub.com/sites/default/files/upm-binaries/33663_Chapter4.pdf
+
+https://www.statisticshowto.com/probability-and-statistics/hypothesis-testing/f-test/#:~:text=F%20Test%20to%20Compare%20Two%20Variances,-A%20Statistical%20F&text=If%20the%20variances%20are%20equal,when%20running%20an%20F%20Test.
+
+https://blog.minitab.com/blog/adventures-in-statistics-2/choosing-between-a-nonparametric-test-and-a-parametric-test
+
+https://statisticsbyjim.com/hypothesis-testing/nonparametric-parametric-tests/
+
+http://gchang.people.ysu.edu/class/s5817/L/L5817_9_MComparisons.pdf
+
+https://tech.okcupid.com/the-pitfalls-of-a-b-testing-in-social-networks/
+
+https://thomasleeper.com/Rcourse/Tutorials/permutationtests.html
+
+https://vulstats.ucsd.edu/pdf/Howell.ch-18.rank-statistics.pdf
+
+https://statisticaloddsandends.wordpress.com/2019/06/09/wilson-score-and-agresti-coull-intervals-for-binomial-proportions/
+
+
